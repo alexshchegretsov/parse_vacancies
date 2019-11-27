@@ -145,8 +145,8 @@ class MySQLSaver:
             else:
                 self.fresh_vacancies.append(new_job)
 
-    def save_to_db(self):
-        sql_formula = "INSERT INTO jobs (date_add, title, company, short_description) VALUES (%s, %s, %s, %s)"
+    def save_to_db(self, table_name):
+        sql_formula = f"INSERT INTO {table_name} (date_add, title, company, short_description) VALUES (%s, %s, %s, %s)"
         for vacancy in self.fresh_vacancies:
             job = (vacancy["date_add"], vacancy["title"], vacancy["company"], vacancy["short_description"])
             self.cursor.execute(sql_formula, job)
@@ -190,7 +190,7 @@ def call_correct_parser(resource, vacancy):
     sql_saver = MySQLSaver()
     saved_entities = sql_saver.extract_all_saved_entities("jobs")
     sql_saver.define_fresh_entities(new_vacancies, saved_entities)
-    sql_saver.save_to_db()
+    sql_saver.save_to_db("jobs")
     # send
     to_send = sql_saver.fresh_vacancies
     sender = Sender()
@@ -198,7 +198,7 @@ def call_correct_parser(resource, vacancy):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--resource", required=True)
-    parser.add_argument("-v", "--vacancy", required=True)
+    parser.add_argument("-r", "--resource", required=True, help="select between 'jooble' and 'tut'")
+    parser.add_argument("-v", "--vacancy", required=True, help="'junior+python+django', for example")
     args = parser.parse_args()
     call_correct_parser(args.resource, args.vacancy)
