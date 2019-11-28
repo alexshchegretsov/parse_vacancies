@@ -27,7 +27,7 @@ class Parser(ABC):
 
 class TUTbyParser(Parser):
     def __init__(self, search_arg):
-        self.start_url = f"https://jobs.tut.by/search/vacancy?only_with_salary=false&clusters=true&area=1002&enable_snippets=true&search_period=5&salary=&st=searchVacancy&text={search_arg}"
+        self.start_url = f"https://jobs.tut.by/search/vacancy?only_with_salary=false&clusters=true&area=1002&enable_snippets=true&search_period=1&salary=&st=searchVacancy&text={search_arg}"
         self.urls = []
         self.headers = {
             "Accept": "text/css,*/*;q=0.1",
@@ -43,7 +43,6 @@ class TUTbyParser(Parser):
         pagination = soup.find("div", attrs={"data-qa": "pager-block"})
         if pagination:
             self.page_amount = int(pagination.find("a", class_="bloko-button HH-Pager-Control").text)
-            print(self.page_amount)
 
     def get_all_urls(self):
         for page_number in range(1, self.page_amount+1):
@@ -77,7 +76,7 @@ class TUTbyParser(Parser):
 
 class JoobleParser(Parser):
     def __init__(self, search_arg):
-        self.start_url = f"https://by.jooble.org/вакансии-{search_arg}/Минск?date=2"
+        self.start_url = f"https://by.jooble.org/вакансии-{search_arg}/Минск?date=0"
         self.urls = []
         self.headers = {
             "Accept": "text/css,*/*;q=0.1",
