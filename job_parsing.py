@@ -11,6 +11,17 @@ from abc import ABC, abstractmethod
 
 
 class Parser(ABC):
+    def __init__(self, first_request_url):
+        self.first_request_url = first_request_url
+        self.pages_urls = []
+        self.headers = {
+            "Accept": "text/css,*/*;q=0.1",
+            "User-Agent": UserAgent().get_random_user_agent(),
+        }
+        self.new_vacancies = []
+        self.page_amount = 1
+        self.session = requests.Session()
+        self.response = self.session.get(url=self.first_request_url, headers=self.headers)
 
     @abstractmethod
     def define_pages_amount(self):
@@ -26,17 +37,6 @@ class Parser(ABC):
 
 
 class TUTbyParser(Parser):
-    def __init__(self, search_arg):
-        self.start_url = f"https://jobs.tut.by/search/vacancy?only_with_salary=false&clusters=true&area=1002&enable_snippets=true&search_period=1&salary=&st=searchVacancy&text={search_arg}"
-        self.urls = []
-        self.headers = {
-            "Accept": "text/css,*/*;q=0.1",
-            "User-Agent": UserAgent().get_random_user_agent(),
-        }
-        self.new_vacancies = []
-        self.page_amount = 1
-        self.session = requests.Session()
-        self.response = self.session.get(url=self.start_url, headers=self.headers)
 
     def define_pages_amount(self):
         soup = BeautifulSoup(self.response.content, "lxml")
@@ -45,12 +45,12 @@ class TUTbyParser(Parser):
             self.page_amount = int(pagination.find("a", class_="bloko-button HH-Pager-Control").text)
 
     def get_all_urls(self):
-        for page_number in range(1, self.page_amount+1):
-            url = f"{self.start_url}&page={page_number-1}"
-            self.urls.append(url)
+        for page_number in range(1, self.page_amount + 1):
+            url = f"{self.first_request_url}&page={page_number-1}"
+            self.pages_urls.append(url)
 
     def parse_pages(self):
-        for url in self.urls:
+        for url in self.pages_urls:
 
             response = self.session.get(url=url, headers=self.headers)
             soup = BeautifulSoup(response.content, "lxml")
@@ -75,17 +75,6 @@ class TUTbyParser(Parser):
 
 
 class JoobleParser(Parser):
-    def __init__(self, search_arg):
-        self.start_url = f"https://by.jooble.org/вакансии-{search_arg}/Минск?date=0"
-        self.urls = []
-        self.headers = {
-            "Accept": "text/css,*/*;q=0.1",
-            "User-Agent": UserAgent().get_random_user_agent(),
-        }
-        self.new_vacancies = []
-        self.page_amount = 1
-        self.session = requests.Session()
-        self.response = self.session.get(url=self.start_url, headers=self.headers)
 
     def define_pages_amount(self):
         if self.response.status_code == 200:
@@ -96,12 +85,12 @@ class JoobleParser(Parser):
 
     def get_all_urls(self):
         for page_number in range(1, self.page_amount + 1):
-            url = f"{self.start_url}&p={page_number}"
-            self.urls.append(url)
+            url = f"{self.first_request_url}&p={page_number}"
+            self.pages_urls.append(url)
 
     def parse_pages(self):
         if self.response.status_code == 200:
-            for url in self.urls:
+            for url in self.pages_urls:
                 response = self.session.get(url=url, headers=self.headers)
                 soup = BeautifulSoup(response.content, "lxml")
                 divs = soup.find_all("div", attrs={"class": "result saved paddings"})
@@ -120,6 +109,45 @@ class JoobleParser(Parser):
                     })
 
 
+class BelmetaParser(Parser):
+
+    def define_pages_amount(self):
+        soup = BeautifulSoup(self.response.content, "lxml")
+        try:
+            page_amount = \
+            soup.find("div", class_="count-sort clearfix").find("div", class_="search-count").text.split()[-1]
+            page_amount = int(page_amount)
+            if page_amount > 10:
+                self.page_amount = page_amount // 10 if not page_amount % 10 else page_amount // 10 + 1
+        except AttributeError as e:
+            print(e)
+            self.page_amount = 0
+
+    def get_all_urls(self):
+        for page_number in range(1, self.page_amount + 1):
+            url = f"{self.first_request_url}&page={page_number}"
+            self.pages_urls.append(url)
+
+    def parse_pages(self):
+        for url in self.pages_urls:
+            response = self.session.get(url=url, headers=self.headers)
+            soup = BeautifulSoup(response.content, "lxml")
+            articles = soup.find_all("article", attrs={"class": "job no-logo"})
+            for article in articles:
+                title = article.find("div", class_="col-xs-12 title-wrap").find("h2", class_="title").find("a").text
+                href = article.find("div", class_="col-xs-12 title-wrap").find("h2", class_="title").find("a")["href"]
+                company = article.find("div", class_="company").text
+                short_description = article.find("div", class_="desc").text
+                date_add = article.find("div", class_="row bottom-wrap").find("div", class_="from").find("span").text
+                self.new_vacancies.append({
+                    "title": title,
+                    "company": company,
+                    "href": href,
+                    "short_description": short_description,
+                    "date_add": date_add
+                })
+
+
 class MySQLSaver:
     def __init__(self, host="localhost", user="parse_user", passwd="Dexter89!", database="parse_db"):
         self.db_connect = mysql.connector.connect(
@@ -133,13 +161,15 @@ class MySQLSaver:
 
     def extract_all_saved_entities(self, table):
         self.cursor.execute(f"SELECT * FROM {table}")
-        for saved_entity in self.cursor.fetchall():
-            yield saved_entity
+        # for saved_entity in self.cursor.fetchall():
+        #    yield saved_entity
+        return self.cursor.fetchall()
 
     def define_fresh_entities(self, new_vacancies, saved_db_vacancies):
         for new_job in new_vacancies:
             for saved_job in saved_db_vacancies:
-                if new_job["short_description"] == saved_job[4]:
+                # print(f"{new_job['title']} {len(new_job['title'])} == {saved_job[2]} {len(saved_job[2])} ", new_job["title"] == saved_job[2])
+                if new_job["short_description"] == saved_job[4] and new_job["title"] == saved_job[2]:
                     break
             else:
                 self.fresh_vacancies.append(new_job)
@@ -164,6 +194,7 @@ class CSVSaver:
 
 
 class Sender:
+
     def notify_send(self, fresh_vacancies):
         while fresh_vacancies:
             vacancy = fresh_vacancies.pop()
@@ -179,12 +210,22 @@ class Sender:
             company = vacancy["company"]
             os.system(f"/usr/bin/notify-send -t 100 'Fresh job by -> {company}' '{message}'")
 
-def call_correct_parser(resource, vacancy):
-    p = JoobleParser(vacancy) if resource == "jooble" else TUTbyParser(vacancy)
+
+def call_correct_parser(resource, query):
+    choices = {
+        "tut": (TUTbyParser,
+                f"https://jobs.tut.by/search/vacancy?only_with_salary=false&clusters=true&area=1002&enable_snippets=true&search_period=1&salary=&st=searchVacancy&text={query}"),
+        "jooble": (JoobleParser, f"https://by.jooble.org/вакансии-{query}/Минск?date=0"),
+        "belmeta": (BelmetaParser, f"https://belmeta.com/vacansii?q={query}&l=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&rsr=&df=1")
+    }
+    parser_class, request_url = choices.get(resource, choices["tut"])
+    # initialization
+    p = parser_class(request_url)
     p.define_pages_amount()
     p.get_all_urls()
     p.parse_pages()
     new_vacancies = p.new_vacancies
+    print(f"[{datetime.datetime.now()}] [{resource} parser] works, vacancies found {len(new_vacancies)}")
     # mysql
     sql_saver = MySQLSaver()
     saved_entities = sql_saver.extract_all_saved_entities("jobs")
@@ -195,9 +236,11 @@ def call_correct_parser(resource, vacancy):
     sender = Sender()
     sender.notify_send(to_send)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--resource", required=True, help="select between 'jooble' and 'tut'")
-    parser.add_argument("-v", "--vacancy", required=True, help="'junior+python+django', for example")
+    parser.add_argument("-r", "--resource", required=True, choices=["tut", "jooble", "belmeta"],
+                        help="select between 'jooble' and 'tut'")
+    parser.add_argument("-q", "--query", required=True, help="'junior+python+django', for example")
     args = parser.parse_args()
-    call_correct_parser(args.resource, args.vacancy)
+    call_correct_parser(args.resource, args.query)
