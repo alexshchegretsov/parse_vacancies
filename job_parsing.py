@@ -142,7 +142,7 @@ class BelmetaParser(Parser):
                 self.new_vacancies.append({
                     "title": title,
                     "company": company,
-                    "href": href,
+                    "href": f"https://belmeta.com{href}",
                     "short_description": short_description,
                     "date_add": date_add
                 })
