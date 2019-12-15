@@ -5,6 +5,7 @@ import csv
 import mysql.connector
 import os
 import datetime
+from urls import TUT_BY_URL, JOOBLE_URL, BELMETA_URL
 from http_request_randomizer.requests.useragent.userAgent import UserAgentManager as UserAgent
 from bs4 import BeautifulSoup
 from abc import ABC, abstractmethod
@@ -161,14 +162,11 @@ class MySQLSaver:
 
     def extract_all_saved_entities(self, table):
         self.cursor.execute(f"SELECT * FROM {table}")
-        # for saved_entity in self.cursor.fetchall():
-        #    yield saved_entity
         return self.cursor.fetchall()
 
     def define_fresh_entities(self, new_vacancies, saved_db_vacancies):
         for new_job in new_vacancies:
             for saved_job in saved_db_vacancies:
-                # print(f"{new_job['title']} {len(new_job['title'])} == {saved_job[2]} {len(saved_job[2])} ", new_job["title"] == saved_job[2])
                 if new_job["short_description"] == saved_job[4] and new_job["title"] == saved_job[2]:
                     break
             else:
@@ -211,16 +209,28 @@ class Sender:
             os.system(f"/usr/bin/notify-send -t 100 'Fresh job by -> {company}' '{message}'")
 
 
-def call_correct_parser(resource, query):
+class Creator:
     choices = {
-        "tut": (TUTbyParser,
-                f"https://jobs.tut.by/search/vacancy?only_with_salary=false&clusters=true&area=1002&enable_snippets=true&search_period=1&salary=&st=searchVacancy&text={query}"),
-        "jooble": (JoobleParser, f"https://by.jooble.org/вакансии-{query}/Минск?date=0"),
-        "belmeta": (BelmetaParser, f"https://belmeta.com/vacansii?q={query}&l=%D0%9C%D0%B8%D0%BD%D1%81%D0%BA&rsr=&df=1")
+        "tut": (TUTbyParser , TUT_BY_URL),
+        "jooble": (JoobleParser, JOOBLE_URL),
+        "belmeta": (BelmetaParser, BELMETA_URL)
     }
-    parser_class, request_url = choices.get(resource, choices["tut"])
+
+    def __init__(self, resource, query):
+        self.resource = resource
+        self.query = query
+
+    def return_parser(self):
+        if self.resource in self.choices:
+            parser, url = self.choices[self.resource]
+            return parser(url.format(self.query))
+        raise ValueError("not valid resource")
+
+
+def call_correct_parser(resource, query):
     # initialization
-    p = parser_class(request_url)
+    creator = Creator(resource, query)
+    p = creator.return_parser()
     p.define_pages_amount()
     p.get_all_urls()
     p.parse_pages()
