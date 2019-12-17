@@ -116,7 +116,7 @@ class BelmetaParser(Parser):
         soup = BeautifulSoup(self.response.content, "lxml")
         try:
             page_amount = \
-            soup.find("div", class_="count-sort clearfix").find("div", class_="search-count").text.split()[-1]
+                soup.find("div", class_="count-sort clearfix").find("div", class_="search-count").text.split()[-1]
             page_amount = int(page_amount)
             if page_amount > 10:
                 self.page_amount = page_amount // 10 if not page_amount % 10 else page_amount // 10 + 1
@@ -167,7 +167,7 @@ class MySQLSaver:
     def define_fresh_entities(self, new_vacancies, saved_db_vacancies):
         for new_job in new_vacancies:
             for saved_job in saved_db_vacancies:
-                if new_job["short_description"] == saved_job[4] and new_job["title"] == saved_job[2]:
+                if new_job["short_description"] == saved_job[4]:
                     break
             else:
                 self.fresh_vacancies.append(new_job)
@@ -211,26 +211,23 @@ class Sender:
 
 class Creator:
     choices = {
-        "tut": (TUTbyParser , TUT_BY_URL),
+        "tut": (TUTbyParser, TUT_BY_URL),
         "jooble": (JoobleParser, JOOBLE_URL),
         "belmeta": (BelmetaParser, BELMETA_URL)
     }
 
-    def __init__(self, resource, query):
-        self.resource = resource
-        self.query = query
-
-    def return_parser(self):
-        if self.resource in self.choices:
-            parser, url = self.choices[self.resource]
-            return parser(url.format(self.query))
+    @classmethod
+    def return_parser(cls, resource, query):
+        if resource in cls.choices:
+            parser, url = cls.choices[resource]
+            query_url = url.format(query)
+            return parser(query_url)
         raise ValueError("not valid resource")
 
 
 def call_correct_parser(resource, query):
     # initialization
-    creator = Creator(resource, query)
-    p = creator.return_parser()
+    p = Creator.return_parser(resource, query)
     p.define_pages_amount()
     p.get_all_urls()
     p.parse_pages()
