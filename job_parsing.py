@@ -21,8 +21,19 @@ class Parser(ABC):
         }
         self.new_vacancies = []
         self.page_amount = 1
+        self.session = None
+        self.response = None
+
+    def set_session(self):
         self.session = requests.Session()
+
+    def recieve_response(self):
         self.response = self.session.get(url=self.first_request_url, headers=self.headers)
+        if self.response.status_code != 200:
+            raise ConnectionError("status_code is ", self.response.status_code)
+
+
+class ParserInterface(ABC):
 
     @abstractmethod
     def define_pages_amount(self):
@@ -37,7 +48,7 @@ class Parser(ABC):
         raise NotImplementedError
 
 
-class TUTbyParser(Parser):
+class TUTbyParser(Parser, ParserInterface):
 
     def define_pages_amount(self):
         soup = BeautifulSoup(self.response.content, "lxml")
@@ -75,7 +86,7 @@ class TUTbyParser(Parser):
                 })
 
 
-class JoobleParser(Parser):
+class JoobleParser(Parser, ParserInterface):
 
     def define_pages_amount(self):
         if self.response.status_code == 200:
@@ -110,7 +121,7 @@ class JoobleParser(Parser):
                     })
 
 
-class BelmetaParser(Parser):
+class BelmetaParser(Parser, ParserInterface):
 
     def define_pages_amount(self):
         soup = BeautifulSoup(self.response.content, "lxml")
@@ -234,6 +245,9 @@ class Creator:
 def call_correct_parser(resource, query):
     # initialization
     p = Creator.return_parser(resource, query)
+    p.set_session()
+    p.recieve_response()
+    # parser works
     p.define_pages_amount()
     p.get_all_urls()
     p.parse_pages()
