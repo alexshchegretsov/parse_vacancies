@@ -150,15 +150,21 @@ class BelmetaParser(Parser):
 
 
 class MySQLSaver:
-    def __init__(self, host="localhost", user="parse_user", passwd="Dexter89!", database="parse_db"):
+    def __init__(self):
+        self.db_connect = None
+        self.cursor = None
+        self.fresh_vacancies = []
+
+    def connect_to_db(self, host="localhost", user="parse_user", passwd="Dexter89!", database="parse_db"):
         self.db_connect = mysql.connector.connect(
             host=host,
             user=user,
             passwd=passwd,
             database=database
         )
+
+    def create_cursor(self):
         self.cursor = self.db_connect.cursor()
-        self.fresh_vacancies = []
 
     def extract_all_saved_entities(self, table):
         self.cursor.execute(f"SELECT * FROM {table}")
@@ -235,6 +241,8 @@ def call_correct_parser(resource, query):
     print(f"[{datetime.datetime.now()}] [{resource} parser] works, vacancies found {len(new_vacancies)}")
     # mysql
     sql_saver = MySQLSaver()
+    sql_saver.connect_to_db()
+    sql_saver.create_cursor()
     saved_entities = sql_saver.extract_all_saved_entities("jobs")
     sql_saver.define_fresh_entities(new_vacancies, saved_entities)
     sql_saver.save_to_db("jobs")
